@@ -38,6 +38,11 @@ module appInsights './modules/appinsights.bicep' = {
 module logicApp './modules/logicapp.bicep' = {
   name: '${rg.name}-logicapp'
   scope: rg
+  dependsOn: [
+    appInsights
+    servicebus
+    cosmosdb
+  ]
   params: {
     appName: 'logicapp-${toLower(uniqueSuffix)}'
     location: rg.location
@@ -48,6 +53,11 @@ module logicApp './modules/logicapp.bicep' = {
 module function './modules/function.bicep' = {
   name: '${rg.name}-function'
   scope: rg
+  dependsOn: [
+    appInsights
+    servicebus
+    cosmosdb
+  ]
   params: {
     appName: 'func-${toLower(uniqueSuffix)}'
     location: rg.location
@@ -60,10 +70,13 @@ module apim './modules/apim.bicep' = {
   name: '${rg.name}-apim'
   scope: rg
   params: {
-    apimServiceName: 'apim-${toLower(uniqueSuffix)}'
+    apimServiceName: 'apim4-${toLower(uniqueSuffix)}' //testing, remove the # later - Soft Delete issue
     publisherEmail: publisherEmail
     publisherName: publisherName
     location: rg.location
+    //functionKey: function.outputs.functionKey  //update to secure string at some point
+    appInsightsName: appInsights.outputs.applicationInsightsName
+    functionName: function.outputs.functionAppName
   }
 }
 
@@ -85,31 +98,31 @@ module cosmosdb './modules/cosmosdb.bicep' = {
   }
 }
 
-module roleAssignmentAPIMSenderSB './modules/configure/roleAssign-apim-service-bus.bicep' = {
-  name: '${rg.name}-roleAssignmentAPIMSB'
-  scope: rg
-  params: {
-    apimServiceName: apim.outputs.apimServiceName
-    sbNameSpace: servicebus.outputs.sbNameSpace
-  }
-  dependsOn: [
-    apim
-    servicebus
-  ]
-}
+// module roleAssignmentAPIMSenderSB './modules/configure/roleAssign-apim-service-bus.bicep' = {
+//   name: '${rg.name}-roleAssignmentAPIMSB'
+//   scope: rg
+//   params: {
+//     apimServiceName: apim.outputs.apimServiceName
+//     sbNameSpace: servicebus.outputs.sbNameSpace
+//   }
+//   dependsOn: [
+//     apim
+//     servicebus
+//   ]
+// }
 
-module roleAssignmentFcuntionReceiverSB './modules/configure/roleAssign-function-service-bus.bicep' = {
-  name: '${rg.name}-roleAssignmentFunctionSB'
-  scope: rg
-  params: {
-    functionAppName: function.outputs.functionAppName
-    sbNameSpace: servicebus.outputs.sbNameSpace
-  }
-  dependsOn: [
-    function
-    servicebus
-  ]
-}
+// module roleAssignmentFcuntionReceiverSB './modules/configure/roleAssign-function-service-bus.bicep' = {
+//   name: '${rg.name}-roleAssignmentFunctionSB'
+//   scope: rg
+//   params: {
+//     functionAppName: function.outputs.functionAppName
+//     sbNameSpace: servicebus.outputs.sbNameSpace
+//   }
+//   dependsOn: [
+//     function
+//     servicebus
+//   ]
+// }
 
 module configurFunctionAppSettings './modules/configure/configure-function.bicep' = {
   name: '${rg.name}-configureFunction'
@@ -120,6 +133,7 @@ module configurFunctionAppSettings './modules/configure/configure-function.bicep
     sbHostName: servicebus.outputs.sbHostName
     deploymentRepositoryUrl: deploymentRepositoryUrl
     deploymentBranch: deploymentBranch
+    sbConnString: servicebus.outputs.sbConnString
   }
   dependsOn: [
     function
@@ -137,6 +151,7 @@ module configurLogicAppSettings './modules/configure/configure-logicapp.bicep' =
     sbHostName: servicebus.outputs.sbHostName
     deploymentRepositoryUrl: deploymentRepositoryUrl
     deploymentBranch: deploymentBranch
+    sbConnString: servicebus.outputs.sbConnString
   }
   dependsOn: [
     logicApp
@@ -145,21 +160,10 @@ module configurLogicAppSettings './modules/configure/configure-logicapp.bicep' =
   ]
 }
 
-module configurAPIM './modules/configure/configure-apim.bicep' = {
-  name: '${rg.name}-configureAPIM'
-  scope: rg
-  params: {
-    apimServiceName: apim.outputs.apimServiceName
-    sbEndpoint: servicebus.outputs.sbEndpoint
-  }
-  dependsOn: [
-    apim
-  ]
-}
-
 //  Telemetry Deployment
 @description('Enable usage and telemetry feedback to Microsoft.')
 param enableTelemetry bool = true
+
 var telemetryId = '69ef933a-eff0-450b-8a46-331cf62e160f-apptemp-${location}'
 resource telemetrydeployment 'Microsoft.Resources/deployments@2021-04-01' = if (enableTelemetry) {
   name: telemetryId
